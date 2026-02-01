@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'https://ai2comic-api.sparky.qzz.io';
 
 export const generateStoryboard = async (prompt, referenceStyle = "", aspectRatio = "16:9") => {
     const response = await axios.post(`${API_BASE_URL}/generate/storyboard`, {

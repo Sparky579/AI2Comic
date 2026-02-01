@@ -307,6 +307,7 @@ class GeminiClient:
         prompt_parts.append("\nEnsure the output is a single cohesive manga page with panels separated by gutters. Include speech bubbles with the specified text.")
         
         full_prompt = "\n".join(prompt_parts)
+        print(f"DEBUG: Full Prompt for Page: {full_prompt[:200]}...") # Log first 200 chars
         
         contents = [full_prompt]
 

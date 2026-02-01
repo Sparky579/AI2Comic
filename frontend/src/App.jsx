@@ -227,6 +227,7 @@ function App() {
       if (result.results?.[0]?.image) {
         setFirstPageImage(result.results[0].image);
         setMangaPages(prev => prev.map((p, idx) => idx === 0 ? { ...p, imageUrl: result.results[0].image, status: 'completed' } : p));
+        setFirstPagePrompt(editableFirstPagePrompt);
       }
     } catch (error) {
       alert("Regeneration failed.");
@@ -244,7 +245,12 @@ function App() {
     setStep(3);
 
     try {
-      const result = await generatePagesBatch(storyboard.pages.slice(1), getCombinedStyle(), config.aspectRatio, config.imageSize || '2K', config.styleImage, firstPagePrompt);
+      // Use firstPageImage as the definitive style reference for the batch
+      // This ensures consistency with the confirmed first page
+      const batchStyleRefImage = firstPageImage || config.styleImage;
+
+      // Use editableFirstPagePrompt as the definitive prompt source
+      const result = await generatePagesBatch(storyboard.pages.slice(1), getCombinedStyle(), config.aspectRatio, config.imageSize || '2K', batchStyleRefImage, editableFirstPagePrompt);
       const resultMap = {};
       result.results.forEach(r => { resultMap[r.page_number] = r.image; });
       setMangaPages(prev => prev.map(page => page.page_number === 1 ? page : { ...page, imageUrl: resultMap[page.page_number] || null, status: resultMap[page.page_number] ? 'completed' : 'failed' }));
@@ -275,9 +281,21 @@ function App() {
 
     try {
       // Get reference image
-      let refImage = extraRefImage;
+      // Get reference image precedence:
+      // 1. If "Use Previous/Current" checked -> use that page's existing image
+      // 2. If extra uploaded ref -> use that
+      // 3. Default -> Use the Confirmed First Page Image (Consistency Anchor)
+      // 4. Fallback -> Sidebar config image
+      let refImage = null;
+
       if (usePrevAsRef && pageData.imageUrl) {
         refImage = pageData.imageUrl;
+      } else if (extraRefImage) {
+        refImage = extraRefImage;
+      } else if (firstPageImage) {
+        refImage = firstPageImage;
+      } else {
+        refImage = config.styleImage;
       }
 
       // Build page data for generation - ensure page_number is explicitly set
