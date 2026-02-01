@@ -222,8 +222,22 @@ function App() {
     setThinkingContent('Regenerating first page...');
     try {
       let refImage = tempRefImage;
-      if (useCurrentAsRef && firstPageImage) refImage = firstPageImage;
-      const result = await generatePagesBatch([{ ...storyboard.pages[0], _custom_prompt: editableFirstPagePrompt }], getCombinedStyle(), config.aspectRatio, config.imageSize || '2K', refImage || config.styleImage, null);
+      // If "Use Current" is checked, firstPageImage becomes the "Additional" ref to be specific? 
+      // User Logic: "Prompt needs to include 'User input [Image] as reference'"
+      // Strategy: 
+      // Main Ref (Style) -> config.styleImage (or null)
+      // Additional Ref -> tempRefImage OR firstPageImage (if using current)
+
+      let additionalImage = tempRefImage;
+      if (useCurrentAsRef && firstPageImage) {
+        additionalImage = firstPageImage;
+      }
+
+      // Check logic: 
+      // 1. Style Anchor: config.styleImage (Sidebar)
+      // 2. Additional: The user's specific input
+
+      const result = await generatePagesBatch([{ ...storyboard.pages[0], _custom_prompt: editableFirstPagePrompt }], getCombinedStyle(), config.aspectRatio, config.imageSize || '2K', config.styleImage, null, additionalImage);
       if (result.results?.[0]?.image) {
         setFirstPageImage(result.results[0].image);
         setMangaPages(prev => prev.map((p, idx) => idx === 0 ? { ...p, imageUrl: result.results[0].image, status: 'completed' } : p));
@@ -280,23 +294,12 @@ function App() {
     setMangaPages(prev => prev.map(p => p.page_number === pageNumber ? { ...p, status: 'pending' } : p));
 
     try {
-      // Get reference image
-      // Get reference image precedence:
-      // 1. If "Use Previous/Current" checked -> use that page's existing image
-      // 2. If extra uploaded ref -> use that
-      // 3. Default -> Use the Confirmed First Page Image (Consistency Anchor)
-      // 4. Fallback -> Sidebar config image
-      let refImage = null;
+      // New Logic for Multi-Image Support
+      // 1. Style Anchor: Always use firstPageImage (or config.styleImage fallback)
+      // 2. Additional Ref: Use extraRefImage OR current page image (if "Use Current" checked)
 
-      if (usePrevAsRef && pageData.imageUrl) {
-        refImage = pageData.imageUrl;
-      } else if (extraRefImage) {
-        refImage = extraRefImage;
-      } else if (firstPageImage) {
-        refImage = firstPageImage;
-      } else {
-        refImage = config.styleImage;
-      }
+      let styleRefImage = (usePrevAsRef && pageData.imageUrl) ? pageData.imageUrl : (firstPageImage || config.styleImage);
+      let additionalRefImage = extraRefImage;
 
       // Build page data for generation - ensure page_number is explicitly set
       const regeneratePageData = {
@@ -313,8 +316,9 @@ function App() {
         getCombinedStyle(),
         config.aspectRatio,
         config.imageSize || '2K',
-        refImage || config.styleImage,
+        styleRefImage,
         pageNumber === 1 ? null : firstPagePrompt,
+        additionalRefImage,
         // onThinking
         (content) => setThinkingContent(prev => prev + content),
         // onImage
@@ -323,7 +327,10 @@ function App() {
           setMangaPages(prev => prev.map(p =>
             p.page_number === pageNumber ? { ...p, imageUrl: imageBase64, status: 'completed', editablePrompt: editedPrompt } : p
           ));
-          if (pageNumber === 1) setFirstPageImage(imageBase64);
+          if (pageNumber === 1) {
+            setFirstPageImage(imageBase64);
+            setFirstPagePrompt(editedPrompt); // Critical: Update reference prompt if Page 1 changes
+          }
         },
         // onError
         (error) => {
@@ -415,7 +422,22 @@ function App() {
               <label>Edit Prompt:</label>
               <textarea value={editableFirstPagePrompt} onChange={(e) => setEditableFirstPagePrompt(e.target.value)} rows={5} style={{ width: '100%', marginBottom: '0.5rem' }} />
               <div className="option-row"><label><input type="checkbox" checked={useCurrentAsRef} onChange={(e) => setUseCurrentAsRef(e.target.checked)} /> Use current image as reference</label></div>
-              <div className="option-row"><label>Or upload extra reference image:</label><input type="file" accept="image/*" onChange={handleTempRefImageUpload} /></div>
+              <div className="option-row">
+                <label>Or upload extra reference image:</label>
+                <input type="file" accept="image/*" onChange={handleTempRefImageUpload} />
+                {tempRefImage && (
+                  <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '0.9rem' }}>Uploaded:</span>
+                    <img src={`data:image/png;base64,${tempRefImage}`} alt="Ref" style={{ height: '40px', border: '1px solid #ccc' }} />
+                    <button
+                      onClick={() => setTempRefImage(null)}
+                      style={{ background: '#ff4444', color: 'white', border: 'none', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="preview-actions">
               <button onClick={handleRegenerateFirstPage} className="secondary">Regenerate First Page</button>

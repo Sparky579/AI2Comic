@@ -275,7 +275,7 @@ class GeminiClient:
 
         return await asyncio.get_running_loop().run_in_executor(self.executor, _call_gemini_image)
 
-    async def generate_manga_page(self, page_data: dict, style_reference: str = "", aspect_ratio: str = "9:16", image_size: str = "2K", style_reference_image_base64: str = None, reference_prompt: str = None) -> str:
+    async def generate_manga_page(self, page_data: dict, style_reference: str = "", aspect_ratio: str = "9:16", image_size: str = "2K", style_reference_image_base64: str = None, reference_prompt: str = None, additional_image_base64: str = None) -> str:
         if not self.client:
              raise ValueError("API Key not set.")
 
@@ -283,7 +283,9 @@ class GeminiClient:
         prompt_parts = []
         
         # Add reference prompt for style consistency (from first page)
-        if reference_prompt:
+        # Add reference prompt for style consistency (from first page)
+        # BUT only if we are NOT using a custom override prompt
+        if reference_prompt and not page_data.get('_custom_prompt'):
             prompt_parts.append(f"[Style Reference from Page 1]: {reference_prompt}\n")
         
         # Check for custom prompt
@@ -304,6 +306,9 @@ class GeminiClient:
                  shot = panel.get('shot_type', '')
                  prompt_parts.append(f"- Panel {p_num}: {desc}. Shot: {shot}. Dialogue/Text: '{dialogue}'")
         
+        if additional_image_base64:
+             prompt_parts.append("\nUser input [Image] as reference")
+
         prompt_parts.append("\nEnsure the output is a single cohesive manga page with panels separated by gutters. Include speech bubbles with the specified text.")
         
         full_prompt = "\n".join(prompt_parts)
@@ -323,6 +328,19 @@ class GeminiClient:
                 )
              except Exception as e:
                  print(f"Error decoding style reference image for page: {e}")
+
+        if additional_image_base64:
+             try:
+                contents.append(
+                    types.Part(
+                         inline_data=types.Blob(
+                            mime_type="image/png", 
+                            data=base64.b64decode(additional_image_base64)
+                         )
+                     )
+                )
+             except Exception as e:
+                 print(f"Error decoding additional reference image for page: {e}")
 
         def _call_gemini_page():
             try:
@@ -349,18 +367,23 @@ class GeminiClient:
 
         return await asyncio.get_running_loop().run_in_executor(self.executor, _call_gemini_page)
 
-    async def generate_manga_page_stream(self, page_data: dict, style_reference: str = "", aspect_ratio: str = "9:16", image_size: str = "2K", style_reference_image_base64: str = None, reference_prompt: str = None):
+    async def generate_manga_page_stream(self, page_data: dict, style_reference: str = "", aspect_ratio: str = "9:16", image_size: str = "2K", style_reference_image_base64: str = None, reference_prompt: str = None, additional_image_base64: str = None):
         """Streaming version of page generation that yields thinking then image."""
         if not self.client:
             raise ValueError("API Key not set.")
         
         import asyncio
         
+        print(f"DEBUG: Streaming Page {page_data.get('page_number')}. StyleRef: {bool(style_reference_image_base64)}, AdditionalRef: {bool(additional_image_base64)}, CustomPrompt: {'YES' if page_data.get('_custom_prompt') else 'NO'} ({page_data.get('_custom_prompt', '')[:50]}...)", flush=True)
+        
         # Build prompt (same as non-streaming)
         
         # Build prompt
+        # Build prompt
         prompt_parts = []
-        if reference_prompt:
+        # Add reference prompt for style consistency (from first page)
+        # BUT only if we are NOT using a custom override prompt
+        if reference_prompt and not page_data.get('_custom_prompt'):
             prompt_parts.append(f"[Style Reference from Page 1]: {reference_prompt}\n")
         
         # Check for custom full-page prompt (from user edit)
@@ -382,6 +405,9 @@ class GeminiClient:
                 shot = panel.get('shot_type', '')
                 prompt_parts.append(f"- Panel {p_num}: {desc}. Shot: {shot}. Dialogue/Text: '{dialogue}'")
         
+        if additional_image_base64:
+             prompt_parts.append("\nUser input [Image] as reference")
+
         prompt_parts.append("\nEnsure the output is a single cohesive manga page with panels separated by gutters. Include speech bubbles with the specified text.")
         full_prompt = "\n".join(prompt_parts)
         
@@ -400,6 +426,31 @@ class GeminiClient:
             except Exception as e:
                 print(f"Error decoding style reference image for page: {e}")
         
+        if additional_image_base64:
+            try:
+                contents.append(
+                    types.Part(
+                        inline_data=types.Blob(
+                            mime_type="image/png",
+                            data=base64.b64decode(additional_image_base64)
+                        )
+                    )
+                )
+            except Exception as e:
+                print(f"Error decoding additional reference image for page: {e}")
+        
+        # --- DEBUG LOGGING ---
+        print("\nDEBUG: === RAW INPUT TO GEMINI ===", flush=True)
+        for i, item in enumerate(contents):
+            if isinstance(item, str):
+                print(f"Item {i} [TEXT]:\n{item}\n", flush=True)
+            elif hasattr(item, 'inline_data') and item.inline_data:
+                print(f"Item {i} [IMAGE]: Mime={item.inline_data.mime_type}, SizeBytes={len(item.inline_data.data)}", flush=True)
+            else:
+                print(f"Item {i} [UNKNOWN]: {type(item)}", flush=True)
+        print("DEBUG: === END RAW INPUT ===\n", flush=True)
+        # ---------------------
+
         result_queue = asyncio.Queue()
         loop = asyncio.get_running_loop()
         

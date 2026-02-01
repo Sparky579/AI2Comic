@@ -76,20 +76,21 @@ export const generateImage = async (panelPrompt, styleReference, aspectRatio, pa
     return response.data;
 };
 
-export const generatePagesBatch = async (pages, styleReference, aspectRatio, imageSize, styleImage, referencePrompt = null) => {
+export const generatePagesBatch = async (pages, styleReference, aspectRatio, imageSize, styleImage, referencePrompt = null, additionalImage = null) => {
     const response = await axios.post(`${API_BASE_URL}/generate/pages/batch`, {
         pages,
         style_reference: styleReference,
         aspect_ratio: aspectRatio,
         image_size: imageSize,
         style_reference_image_base64: styleImage,
-        reference_prompt: referencePrompt
+        reference_prompt: referencePrompt,
+        additional_image_base64: additionalImage
     });
     return response.data;
 };
 
 // SSE streaming for single page generation (with thinking output)
-export const generatePageStream = (page, styleReference, aspectRatio, imageSize, styleImage, referencePrompt, onThinking, onImage, onError) => {
+export const generatePageStream = (page, styleReference, aspectRatio, imageSize, styleImage, referencePrompt, additionalImage, onThinking, onImage, onError) => {
     return new Promise((resolve, reject) => {
         fetch(`${API_BASE_URL}/generate/page/stream`, {
             method: 'POST',
@@ -100,7 +101,8 @@ export const generatePageStream = (page, styleReference, aspectRatio, imageSize,
                 aspect_ratio: aspectRatio,
                 image_size: imageSize,
                 style_reference_image_base64: styleImage,
-                reference_prompt: referencePrompt
+                reference_prompt: referencePrompt,
+                additional_image_base64: additionalImage
             })
         }).then(response => {
             const reader = response.body.getReader();

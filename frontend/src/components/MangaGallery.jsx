@@ -114,6 +114,18 @@ const MangaGallery = ({ pages, onPageRegenerate, isLoading, onDownloadAll }) => 
                         <div className="option-row">
                             <label>Or upload extra reference image:</label>
                             <input type="file" accept="image/*" onChange={handleRefImageUpload} />
+                            {extraRefImage && (
+                                <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <span style={{ fontSize: '0.9rem' }}>Uploaded:</span>
+                                    <img src={`data:image/png;base64,${extraRefImage}`} alt="Ref" style={{ height: '40px', border: '1px solid #ccc' }} />
+                                    <button
+                                        onClick={() => setExtraRefImage(null)}
+                                        style={{ background: '#ff4444', color: 'white', border: 'none', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}
+                                    >
+                                        Remove
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         <div style={{ marginTop: '0.5rem' }}>

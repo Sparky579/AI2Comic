@@ -99,6 +99,7 @@ class BatchPageRequest(BaseModel):
     image_size: Optional[str] = "2K"
     style_reference_image_base64: Optional[str] = None
     reference_prompt: Optional[str] = None  # From first page for consistency
+    additional_image_base64: Optional[str] = None
 
 @app.post("/generate/pages/batch")
 async def generate_pages_batch(request: BatchPageRequest):
@@ -113,7 +114,8 @@ async def generate_pages_batch(request: BatchPageRequest):
                 aspect_ratio=request.aspect_ratio,
                 image_size=request.image_size,
                 style_reference_image_base64=request.style_reference_image_base64,
-                reference_prompt=request.reference_prompt
+                reference_prompt=request.reference_prompt,
+                additional_image_base64=request.additional_image_base64
             )
             return {"page_number": page.get('page_number'), "image": image_base64}
         except Exception as e:
@@ -132,6 +134,7 @@ class StreamPageRequest(BaseModel):
     image_size: Optional[str] = "2K"
     style_reference_image_base64: Optional[str] = None
     reference_prompt: Optional[str] = None
+    additional_image_base64: Optional[str] = None
 
 @app.post("/generate/page/stream")
 async def generate_page_stream(request: StreamPageRequest):
@@ -146,7 +149,8 @@ async def generate_page_stream(request: StreamPageRequest):
                 aspect_ratio=request.aspect_ratio,
                 image_size=request.image_size,
                 style_reference_image_base64=request.style_reference_image_base64,
-                reference_prompt=request.reference_prompt
+                reference_prompt=request.reference_prompt,
+                additional_image_base64=request.additional_image_base64
             ):
                 yield f"data: {json_module.dumps(chunk)}\n\n"
         except Exception as e:
