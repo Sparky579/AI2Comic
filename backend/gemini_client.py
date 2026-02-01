@@ -54,6 +54,43 @@ class GeminiClient:
             print(f"Error saving API key: {e}")
             return False
 
+    def _format_dialogue(self, text: str) -> str:
+        """
+        Formats dialogue text into: (Character Name) "Spoken Text".
+        1. Extracts character name from prefix (e.g. "Doraemon:").
+        2. Ensures spoken text is wrapped in quotes.
+        3. If no name found, just returns quoted text.
+        """
+        if not text:
+            return ""
+            
+        import re
+        
+        # Pattern to find Name: Content
+        # ^(.*?)([:：])\s*(.*)$
+        match = re.match(r'^(.*?)([:：])\s*(.*)$', text, re.DOTALL)
+        
+        name = ""
+        content = text
+        
+        if match:
+            name = match.group(1).strip()
+            content = match.group(3).strip()
+            
+        # Clean quotes from content first (to avoid double quoting)
+        if (content.startswith('"') and content.endswith('"')) or \
+           (content.startswith("'") and content.endswith("'")) or \
+           (content.startswith('“') and content.endswith('”')):
+            content = content[1:-1]
+            
+        # Format
+        formatted_content = f'"{content}"'
+        
+        if name:
+            return f"({name}) {formatted_content}"
+        else:
+            return formatted_content
+
     async def generate_storyboard(self, prompt: str, reference_style: str = "", aspect_ratio: str = "16:9") -> dict:
         if not self.client:
             raise ValueError("API Key not set. Please configure the Google API Key first.")
@@ -283,9 +320,7 @@ class GeminiClient:
         prompt_parts = []
         
         # Add reference prompt for style consistency (from first page)
-        # Add reference prompt for style consistency (from first page)
-        # BUT only if we are NOT using a custom override prompt
-        if reference_prompt and not page_data.get('_custom_prompt'):
+        if reference_prompt:
             prompt_parts.append(f"[Style Reference from Page 1]: {reference_prompt}\n")
         
         # Check for custom prompt
@@ -302,14 +337,16 @@ class GeminiClient:
             for panel in page_data.get('panels', []):
                  p_num = panel.get('panel_number')
                  desc = panel.get('description', '')
-                 dialogue = panel.get('dialogue', '')
+                 raw_dialogue = panel.get('dialogue', '')
+                 formatted_dialogue = self._format_dialogue(raw_dialogue)
                  shot = panel.get('shot_type', '')
-                 prompt_parts.append(f"- Panel {p_num}: {desc}. Shot: {shot}. Dialogue/Text: '{dialogue}'")
+                 prompt_parts.append(f"- Panel {p_num}: {desc}. Shot: {shot}. Dialogue: {formatted_dialogue}")
         
         if additional_image_base64:
              prompt_parts.append("\nUser input [Image] as reference")
 
-        prompt_parts.append("\nEnsure the output is a single cohesive manga page with panels separated by gutters. Include speech bubbles with the specified text.")
+        prompt_parts.append("\nEnsure the output is a single cohesive manga page with panels separated by gutters.")
+        prompt_parts.append("IMPORTANT: Dialogue is provided in format (Character) \"Text\". Make sure the speech bubble points to the correct Character, but ONLY write the Text inside the quotes into the bubble.")
         
         full_prompt = "\n".join(prompt_parts)
         print(f"DEBUG: Full Prompt for Page: {full_prompt[:200]}...") # Log first 200 chars
@@ -341,6 +378,18 @@ class GeminiClient:
                 )
              except Exception as e:
                  print(f"Error decoding additional reference image for page: {e}")
+
+        # --- DEBUG LOGGING ---
+        print("\nDEBUG: === RAW INPUT TO GEMINI (BATCH) ===", flush=True)
+        for i, item in enumerate(contents):
+            if isinstance(item, str):
+                print(f"Item {i} [TEXT]:\n{item}\n", flush=True)
+            elif hasattr(item, 'inline_data') and item.inline_data:
+                print(f"Item {i} [IMAGE]: Mime={item.inline_data.mime_type}, SizeBytes={len(item.inline_data.data)}", flush=True)
+            else:
+                print(f"Item {i} [UNKNOWN]: {type(item)}", flush=True)
+        print("DEBUG: === END RAW INPUT (BATCH) ===\n", flush=True)
+        # ---------------------
 
         def _call_gemini_page():
             try:
@@ -401,14 +450,16 @@ class GeminiClient:
             for panel in page_data.get('panels', []):
                 p_num = panel.get('panel_number')
                 desc = panel.get('description', '')
-                dialogue = panel.get('dialogue', '')
+                raw_dialogue = panel.get('dialogue', '')
+                formatted_dialogue = self._format_dialogue(raw_dialogue)
                 shot = panel.get('shot_type', '')
-                prompt_parts.append(f"- Panel {p_num}: {desc}. Shot: {shot}. Dialogue/Text: '{dialogue}'")
+                prompt_parts.append(f"- Panel {p_num}: {desc}. Shot: {shot}. Dialogue: {formatted_dialogue}")
         
         if additional_image_base64:
              prompt_parts.append("\nUser input [Image] as reference")
 
-        prompt_parts.append("\nEnsure the output is a single cohesive manga page with panels separated by gutters. Include speech bubbles with the specified text.")
+        prompt_parts.append("\nEnsure the output is a single cohesive manga page with panels separated by gutters.")
+        prompt_parts.append("IMPORTANT: Dialogue is provided in format (Character) \"Text\". Make sure the speech bubble points to the correct Character, but ONLY write the Text inside the quotes into the bubble.")
         full_prompt = "\n".join(prompt_parts)
         
         contents = [full_prompt]
